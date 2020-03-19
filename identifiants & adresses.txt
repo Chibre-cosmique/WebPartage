@@ -1,0 +1,7 @@
+176.138.70.122
+pi
+1373Conflans
+/mnt/c/Users/loloi/Documents/WebPartage
+/var/www/html/WebPartage
+
+

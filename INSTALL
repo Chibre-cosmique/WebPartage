@@ -1,0 +1,171 @@
+#!/bin/bash
+
+backtitle="WebPartage by Loïc Vanden Bossche"
+
+DIALOG=${DIALOG=dialog}
+fichtemp=`tempfile 2>/dev/null` || fichtemp=/tmp/test$$
+
+trap "rm -f $fichtemp" 0 1 2 5 15
+$DIALOG --clear --backtitle "$backtitle" --title "MODE" \
+    --menu "Choisissez une option :" 20 50 2 \
+     1 "Distante (recomandée)" \
+     2 "Locale" 2> $fichtemp
+valret=$?
+
+case $valret in
+
+    0) mode=`cat $fichtemp` ;;
+    1) clear; exit  ;;   
+    255) clear; exit ;;
+
+esac
+
+if [ $mode = 1 ]
+then
+        trap "rm -f $fichtemp" 0 1 2 5 15
+        $DIALOG --backtitle "$backtitle" --title "IP" --clear \
+                --inputbox "Entrez l'ip du serveur distant" 16 51 2> $fichtemp
+
+        valret=$?
+
+        case $valret in
+          
+            0) ip=`cat $fichtemp` ;;
+            1) clear; exit  ;;   
+            255) clear; exit ;;
+
+        esac
+
+        trap "rm -f $fichtemp" 0 1 2 5 15
+        $DIALOG --backtitle "$backtitle" --title "SSH USER" --clear \
+                --inputbox "Entrez l'utilateur ssh du serveur" 16 51 2> $fichtemp
+
+        valret=$?
+
+        case $valret in
+          
+            0) userSSH=`cat $fichtemp` ;;
+            1) clear; exit  ;;   
+            255) clear; exit ;;
+
+        esac
+
+        trap "rm -f $fichtemp" 0 1 2 5 15
+        $DIALOG --backtitle "$backtitle" --title "SSH PASSWD" --clear \
+                --passwordbox "Entrez le mot de passe ssh du serveur" 16 51 2> $fichtemp
+
+        valret=$?
+
+        case $valret in
+          
+            0) passwdSSH=`cat $fichtemp` ;;
+            1) clear; exit  ;;   
+            255) clear; exit ;;
+
+        esac
+
+        dir=`$DIALOG --backtitle "$backtitle" --stdout --title "Choisissez le dossier local a partager" --fselect / 14 48`
+
+        case $? in
+
+            0) ;;
+            1) clear; exit  ;;   
+            255) clear; exit  ;;   
+
+        esac
+
+        trap "rm -f $fichtemp" 0 1 2 5 15
+        $DIALOG --backtitle "$backtitle" --title "DOSSIER DISTANT" --clear \
+                --inputbox "Entrez l'emplacement d'installation distant" 16 51 2> $fichtemp
+
+        valret=$?
+
+        case $valret in
+          
+            0) dirD=`cat $fichtemp` ;;
+            1) clear; exit  ;;   
+            255) clear; exit ;;
+
+        esac
+
+fi
+
+
+
+trap "rm -f $fichtemp" 0 1 2 5 15
+$DIALOG --backtitle "$backtitle" --title "USER" --clear \
+        --inputbox "Tapez le nom d'utilisateur du site" 16 51 2> $fichtemp
+
+valret=$?
+
+case $valret in
+  
+    0) user=`cat $fichtemp` ;;
+    1) clear; exit  ;;   
+    255) clear; exit ;;
+
+esac
+
+trap "rm -f $fichtemp" 0 1 2 5 15
+$DIALOG --backtitle "$backtitle" --title "PASSWD" --clear \
+        --passwordbox "Tapez le mot de passe du site" 16 51 2> $fichtemp
+
+valret=$?
+
+case $valret in
+  
+    0) passwd=`cat $fichtemp` ;;
+    1) clear; exit  ;;   
+    255) clear; exit ;;
+
+esac
+
+clear
+
+
+echo 'AuthName "Connexion"
+AuthType Basic
+AuthUserFile "'$dirD'/'$user'/.htpasswd"
+Require valid-user' > .htaccess
+
+htpasswd -b -c .htpasswd $user $passwd
+
+for file in $dir/*/*; 
+	do 
+		if grep -sq ' ' <<< "$file"
+			then
+				echo $file
+				mv "$file" `echo $file | tr ' ' '_' ` 2>/dev/null ;  
+		fi
+	done
+
+if [ $mode = 1 ]
+then
+
+	sshpass -p $passwdSSH ssh -o StrictHostKeyChecking=no $userSSH@$ip mkdir $dirD $dirD/$user
+
+	sshpass -p $passwdSSH scp -o StrictHostKeyChecking=no -r html-index.sh Icon background.jpg .htpasswd .htaccess $userSSH@$ip:$dirD/$user
+
+	sshpass -p $passwdSSH rsync -az -r --delete-excluded --force --progress $dir/* $userSSH@$ip:$dirD/$user/Files
+
+	sshpass -p $passwdSSH ssh -o StrictHostKeyChecking=no $userSSH@$ip $dirD/$user/html-index.sh $dirD/$user
+
+	echo '#!/bin/bash
+
+	for file in '$dir'/*/*; 
+		do 
+			if grep -sq "'" "'" <<< "$file"
+				then
+					echo $file
+					mv "$file" `echo $file | tr " " '_' ` 2>/dev/null ;  
+			fi
+		done
+
+		sshpass -p "'$passwdSSH'" rsync -az -r --delete-excluded --force '$dir'/* '$userSSH'@'$ip':'$dirD'/'$user'/Files
+
+		sshpass -p "'$passwdSSH'" ssh -o StrictHostKeyChecking=no '$userSSH'@'$ip' '$dirD'/'$user'/html-index.sh '$dirD'/'$user'' > /usr/local/bin/Actualiser-Partage-$user
+
+fi
+chmod -R 777 /usr/local/bin/Actualiser-Partage
+
+echo "Terminé"
