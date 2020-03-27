@@ -1,4 +1,0 @@
-AuthName "Connexion"
-AuthType Basic
-AuthUserFile "/var/www/html/test/pi/.htpasswd"
-Require valid-user
